@@ -1,5 +1,37 @@
-
 const mongoose = require("mongoose");
+
+const foodEntrySchema = new mongoose.Schema({
+  foodId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Food',
+    required: true
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  caloriesPerServing: {
+    type: Number,
+    required: true
+  },
+  quantity: {
+    type: Number,
+    required: true,
+    min: 0.1
+  },
+  proteinPerServing: {
+    type: Number,
+    default: 0
+  },
+  carbohydratesPerServing: {
+    type: Number,
+    default: 0
+  },
+  fatsPerServing: {
+    type: Number,
+    default: 0
+  }
+}, { _id: false });
 
 const dailyLogSchema = new mongoose.Schema({
   userId: {
@@ -10,29 +42,21 @@ const dailyLogSchema = new mongoose.Schema({
   date: {
     type: Date,
     required: true,
-    default: Date.now,
+    default: () => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0); // Set to start of day
+      return d;
+    },
     set: function(date) {
       const d = new Date(date);
-      d.setHours(0, 0, 0, 0); // Set to start of the day UTC
+      d.setHours(0, 0, 0, 0);
       return d;
     }
   },
-  foods: [
-    {
-      foodId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Food',
-        required: true
-      },
-      name: { type: String, required: true },
-      caloriesPerServing: { type: Number, required: true },
-      quantity: { type: Number, required: true, min: 0.1 },
-      // NEW: Store macros per serving in the sub-document when logged
-      proteinPerServing: { type: Number, default: 0 },
-      carbohydratesPerServing: { type: Number, default: 0 },
-      fatsPerServing: { type: Number, default: 0 }
-    }
-  ],
+  foods: {
+    type: [foodEntrySchema],
+    default: []
+  },
   totalCalories: {
     type: Number,
     default: 0
@@ -53,25 +77,29 @@ const dailyLogSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Unique constraint: one log per user per day
 dailyLogSchema.index({ userId: 1, date: 1 }, { unique: true });
 
-// Pre-save hook to calculate totalCalories and NEW total macros
-dailyLogSchema.pre('save', function(next) {
+// Automatically calculate totals before saving
+dailyLogSchema.pre('save', function (next) {
   let sumCalories = 0;
   let sumProtein = 0;
   let sumCarbs = 0;
   let sumFats = 0;
 
   this.foods.forEach(foodEntry => {
-    sumCalories += foodEntry.caloriesPerServing * foodEntry.quantity;
-    sumProtein += (foodEntry.proteinPerServing || 0) * foodEntry.quantity; // Use 0 if not defined
-    sumCarbs += (foodEntry.carbohydratesPerServing || 0) * foodEntry.quantity;
-    sumFats += (foodEntry.fatsPerServing || 0) * foodEntry.quantity;
+    const qty = foodEntry.quantity || 0;
+    sumCalories += (foodEntry.caloriesPerServing || 0) * qty;
+    sumProtein += (foodEntry.proteinPerServing || 0) * qty;
+    sumCarbs += (foodEntry.carbohydratesPerServing || 0) * qty;
+    sumFats += (foodEntry.fatsPerServing || 0) * qty;
   });
+
   this.totalCalories = sumCalories;
   this.totalProtein = sumProtein;
   this.totalCarbohydrates = sumCarbs;
   this.totalFats = sumFats;
+
   next();
 });
 
