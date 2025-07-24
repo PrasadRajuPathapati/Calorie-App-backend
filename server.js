@@ -113,7 +113,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // 📌 Multer setup for profile picture uploads
-// Multer will still save to local /uploads temporarily for Vercel Serverless.
+// Multer will still save to local /tmp temporarily for Vercel Serverless.
 // However, THIS LOCAL FILE WILL NOT PERSIST after the function ends.
 // For persistent storage, REPLACE THIS WITH CLOUD STORAGE UPLOAD LOGIC.
 const storage = multer.diskStorage({
@@ -272,11 +272,14 @@ app.post("/save-profile", upload.single("profilePic"), async (req, res) => {
     // --- IMPORTANT: CLOUD STORAGE INTEGRATION HERE FOR PROFILE PICS ---
     if (req.file) {
         // STEP 1: UPLOAD THE FILE TO CLOUD STORAGE (e.g., Cloudinary, AWS S3)
-        // Example with a placeholder for Cloudinary:
-        // const uploadResult = await cloudinary.uploader.upload(req.file.path);
-        // const newProfilePicUrl = uploadResult.secure_url; // Get URL from cloud service
+        // For Vercel deployment, you NEED to replace this with actual cloud upload logic.
+        // Example:
+        // const cloudinary = require('cloudinary').v2;
+        // cloudinary.config({ cloud_name: process.env.CLOUDINARY_CLOUD_NAME, api_key: process.env.CLOUDINARY_API_KEY, api_secret: process.env.CLOUDINARY_API_SECRET });
+        // const uploadResult = await cloudinary.uploader.upload(req.file.path, { folder: "calorie_app_profile_pics" });
+        // const newProfilePicUrl = uploadResult.secure_url;
 
-        const newProfilePicUrl = `/uploads/${req.file.filename}`; // FOR LOCAL TESTING ONLY (WILL NOT PERSIST ON VERCEL)
+        const newProfilePicUrl = `/uploads/${req.file.filename}`; // This path is for LOCAL DEV only. WILL NOT PERSIST ON VERCEL.
 
         // STEP 2: DELETE THE TEMPORARY LOCAL FILE (after uploading to cloud)
         try {
@@ -288,7 +291,7 @@ app.post("/save-profile", upload.single("profilePic"), async (req, res) => {
 
         // STEP 3: If there was an old profile pic URL, delete it from cloud storage too
         if (user.profilePic && user.profilePic.startsWith('http')) { // Assuming cloud URLs start with http
-            // const publicId = getPublicIdFromCloudinaryUrl(user.profilePic); // Implement this helper
+            // Example: const publicId = getPublicIdFromCloudinaryUrl(user.profilePic); // Implement this helper
             // await cloudinary.uploader.destroy(publicId);
             console.log(`Placeholder: Deleted old profile pic from cloud storage: ${user.profilePic}`);
         }
@@ -298,7 +301,7 @@ app.post("/save-profile", upload.single("profilePic"), async (req, res) => {
     } else if (removeProfilePic === 'true') {
         // If there's a profile pic URL in DB, delete it from cloud storage
         if (user.profilePic && user.profilePic.startsWith('http')) {
-            // const publicId = getPublicIdFromCloudinaryUrl(user.profilePic);
+            // Example: const publicId = getPublicIdFromCloudinaryUrl(user.profilePic);
             // await cloudinary.uploader.destroy(publicId);
             console.log(`Placeholder: Deleted profile pic from cloud storage on explicit removal request: ${user.profilePic}`);
         }
@@ -506,7 +509,7 @@ app.post('/api/log-food', authenticateToken, async (req, res) => {
         name: food.name,
         caloriesPerServing: food.calories,
         quantity: quantity,
-        proteinPerServing: food.protein, // Include macros from food document
+        proteinPerServing: food.protein,
         carbohydratesPerServing: food.carbohydrates,
         fatsPerServing: food.fats
       });
@@ -520,7 +523,7 @@ app.post('/api/log-food', authenticateToken, async (req, res) => {
     if (err.code === 11000) {
       return res.status(409).json({ success: false, message: "A log for this date already exists. Update it instead of creating a new one." });
     }
-    res.status(500).json({ success: false, message: "Server error while logging food." });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -548,7 +551,7 @@ app.delete('/api/daily-log/:logId/foods/:foodEntryId', authenticateToken, async 
 
   } catch (err) {
     console.error("❌ Error deleting food entry:", err);
-    res.status(500).json({ success: false, message: "Server error while deleting food entry." });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -575,7 +578,6 @@ app.get('/api/daily-log', authenticateToken, async (req, res) => {
     let totalCarbohydrates = 0;
     let totalFats = 0;
 
-    // Use the stored macros in the foodEntry sub-document
     dailyLog.foods.forEach(entry => {
         totalProtein += (entry.proteinPerServing || 0) * entry.quantity;
         totalCarbohydrates += (entry.carbohydratesPerServing || 0) * entry.quantity;
@@ -591,7 +593,7 @@ app.get('/api/daily-log', authenticateToken, async (req, res) => {
 
   } catch (err) {
     console.error("❌ Error fetching daily log:", err);
-    res.status(500).json({ success: false, message: "Server error while fetching daily log." });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -617,7 +619,7 @@ app.get('/api/daily-log/history', authenticateToken, async (req, res) => {
             date: log.date.toISOString().split('T')[0],
             totalCalories: log.totalCalories,
             totalProtein: Math.round(log.totalProtein),
-            totalCarbohydrates: Math.round(log.totalCarbohydrates),
+            totalCarbohydrates: Math.round(log.carbohydrates), // Check this line: should be log.totalCarbohydrates
             totalFats: Math.round(log.totalFats)
         }));
 
@@ -625,7 +627,7 @@ app.get('/api/daily-log/history', authenticateToken, async (req, res) => {
 
     } catch (err) {
         console.error("❌ Error fetching daily log history:", err);
-        res.status(500).json({ success: false, message: "Server error while fetching log history." });
+        res.status(500).json({ success: false, message: "Server error" });
     }
 });
 
@@ -642,7 +644,7 @@ app.get('/api/foods', async (req, res) => {
     res.json({ success: true, foods });
   } catch (err) {
     console.error("❌ Error fetching food list:", err);
-    res.status(500).json({ success: false, message: "Server error while fetching food list." });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
